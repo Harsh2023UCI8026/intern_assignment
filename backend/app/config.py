@@ -10,6 +10,12 @@ _ENGLISH_LANGUAGE_POLICY = (
     "Always reply in clear, natural English unless the customer explicitly asks "
     "for another language."
 )
+_READABILITY_POLICY = (
+    "Format answers for easy scanning: use short paragraphs, descriptive headings "
+    "for longer replies, concise bullets or numbered steps when helpful, and valid "
+    "Markdown tables for comparisons or when requested. Keep table cells concise "
+    "and answers engaging without unnecessary formatting."
+)
 _CUSTOMER_LANGUAGE_RULE = re.compile(
     r"(?:respond|reply)\s+in\s+(?:the\s+)?"
     r"(?:language(?:\s+and\s+tone)?\s+used\s+by\s+(?:the\s+)?customer|"
@@ -19,10 +25,12 @@ _CUSTOMER_LANGUAGE_RULE = re.compile(
 
 
 def ensure_english_system_prompt(prompt: str) -> str:
-    """Keep legacy/configured prompts in English unless a customer asks otherwise."""
+    """Normalize legacy prompts and add clear English, readable-format defaults."""
     prompt = _CUSTOMER_LANGUAGE_RULE.sub(_ENGLISH_LANGUAGE_POLICY, prompt)
     if _ENGLISH_LANGUAGE_POLICY.casefold() not in prompt.casefold():
         prompt = f"{prompt.rstrip()} {_ENGLISH_LANGUAGE_POLICY}"
+    if _READABILITY_POLICY.casefold() not in prompt.casefold():
+        prompt = f"{prompt.rstrip()} {_READABILITY_POLICY}"
     return prompt
 
 

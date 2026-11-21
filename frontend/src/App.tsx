@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import ReactMarkdown, { type Components } from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   Activity,
   ArrowDownRight,
@@ -93,6 +95,22 @@ const scenarios: Scenario[] = [
 
 const CACHE_PROMPT =
   "A customer asks in Hinglish: 'Kya aap Sunday ko site visit book kar sakte ho?' Reply in one helpful sentence.";
+
+const markdownComponents: Components = {
+  table: ({ children }) => (
+    <div className="markdown-table-scroll" role="region" aria-label="Answer table" tabIndex={0}>
+      <table>{children}</table>
+    </div>
+  ),
+  a: ({ href, children }) =>
+    href ? (
+      <a href={href} target="_blank" rel="noopener noreferrer">
+        {children}
+      </a>
+    ) : (
+      <>{children}</>
+    ),
+};
 
 function makeId() {
   if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
@@ -806,7 +824,11 @@ function MessageRow({
       <span className="assistant-avatar"><Sparkles size={14} /></span>
       <div className="assistant-message-wrap">
         <div className="message-author"><span>Lyftr AI</span><time>{message.time}</time></div>
-        <div className="assistant-bubble">{message.content}</div>
+        <div className="assistant-bubble assistant-markdown">
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+            {message.content}
+          </ReactMarkdown>
+        </div>
         <div className="reply-metadata">
           <div className={`source-badge ${fromCache ? "cached" : "live"}`}>
             <span className="source-dot" />

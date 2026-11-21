@@ -73,6 +73,7 @@ def test_legacy_environment_prompt_is_normalized_to_english(client, monkeypatch)
 
     assert "Always reply in clear, natural English" in prompt
     assert "Reply in the customer's language" not in prompt
+    assert "valid Markdown tables for comparisons or when requested" in prompt
 
 
 def test_legacy_saved_session_prompt_is_upgraded_to_english(client, monkeypatch):
