@@ -35,7 +35,13 @@ Docker Desktop and its Linux engine must be running. Node.js and Python do not n
 
    Create keys at [Google AI Studio API keys](https://aistudio.google.com/apikey). Stay on the free tier and do not enable billing. Copy each key exactly; keep the comma between them, and do not add quotes or spaces. Never put keys in `frontend/src`, GitHub, or this chat.
 
-3. Save `.env` and build/start both services:
+3. Save `.env` and build/start both services with the required Makefile target:
+
+   ```powershell
+   make up
+   ```
+
+   If GNU Make is unavailable in PowerShell, run the equivalent Docker Compose command:
 
    ```powershell
    docker compose up -d --build
@@ -55,7 +61,9 @@ Docker Desktop and its Linux engine must be running. Node.js and Python do not n
    docker compose up -d --force-recreate backend
    ```
 
-   To stop the app, run `docker compose down`. The SQLite file is stored at `/data/app.db` in the named `app_data` Docker volume and survives container rebuilds. The cache is process-local, so it is intentionally started with one backend worker.
+   To stop the app, run `make down` (or `docker compose down` if GNU Make is unavailable). The SQLite file is stored at `/data/app.db` in the named `app_data` Docker volume and survives container rebuilds. The cache is process-local, so it is intentionally started with one backend worker.
+
+   The host ports are configurable with `FRONTEND_PORT` and `BACKEND_PORT` in `.env`; defaults are `3000` and `8000`. If you change either port, keep `VITE_API_BASE_URL` and `ALLOWED_ORIGINS` aligned with the browser-visible URLs.
 
 ### Free-tier API setup
 
@@ -145,7 +153,7 @@ The service exposes exactly the required application routes: `GET /health`, `POS
 
 The backend tests use a mocked provider and make no paid API calls. Run them in Docker with `docker compose run --rm backend pytest -q` or `make test` when GNU Make is available.
 
-The suite covers health readiness, request validation, multi-turn context, session isolation, oldest-first history, exact cache hits across sessions, fallback from `key_1` to `key_2`, all-keys-failed behavior, and unknown sessions.
+The suite covers health readiness, frontend CORS preflight, request validation, multi-turn context, session isolation, oldest-first history, exact cache hits across sessions, simulated 429/500/502/503 fallback, disabled and malformed failure hooks, per-key all-provider failure, metadata fields, and unknown sessions.
 
 For a live smoke check, use `Invoke-RestMethod http://localhost:8000/health`, send a chat request to `/chat`, then load `/sessions/{session_id}/messages`. The included UI demo buttons also exercise cache replay, key failover, and the clean all-keys-down 503 path.
 
