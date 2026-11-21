@@ -358,7 +358,7 @@ function App() {
     <div className="app-shell">
       <header className="topbar" id="home">
         <a className="brand" href="#home" aria-label="Lyftr AI home">
-          <img className="brand-logo" src="/lyftr-logo.jpg" alt="" aria-hidden="true" />
+          <img className="brand-logo" src="/lyftr-logo.png" alt="" aria-hidden="true" />
           <span className="brand-copy">
             <strong>Lyftr AI</strong>
             <small>Customer conversations</small>
