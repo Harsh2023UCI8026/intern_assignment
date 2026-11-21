@@ -32,6 +32,7 @@ from .llm import (
     response_text,
     token_usage,
 )
+from .response_cache import CachedResponse, exact_request_key, response_cache
 
 logger = logging.getLogger("lyftr.api")
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -233,6 +234,7 @@ async def chat(
     ]
 
     started = time.perf_counter()
+    cache_key = exact_request_key(settings.model, messages)
     fallback_attempts = 0
     failure_kinds: list[str] = []
     answer: str | None = None
@@ -266,6 +268,18 @@ async def chat(
                 winning_key_id = key_id
             break
         except Exception as error:
+            cached_response = (
+                response_cache.get(cache_key) if not simulated_failures else None
+            )
+            if cached_response is not None:
+                answer = cached_response.reply
+                input_tokens = cached_response.input_tokens
+                output_tokens = cached_response.output_tokens
+                metadata_source = "LLM_CACHE"
+                winning_key_id = None
+                fallback_attempts = 0
+                break
+
             failure_kind = _provider_failure_kind(error)
             failure_kinds.append(failure_kind)
             logger.warning(
@@ -353,6 +367,15 @@ async def chat(
         system_prompt=system_prompt,
         prompt_was_overridden=prompt_was_overridden,
     )
+    if not simulated_failures:
+        response_cache.put(
+            cache_key,
+            CachedResponse(
+                reply=answer,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+            ),
+        )
     return {"session_id": payload.session_id, "reply": answer, "metadata": metadata}
 
 

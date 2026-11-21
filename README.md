@@ -128,6 +128,7 @@ Set the backend environment variables from `.env` before starting Uvicorn. For a
 ### Caching
 
 - LiteLLM's built-in local cache uses the selected model and complete message list: system prompt, prior turns, and the new user message. Session ID and API key are excluded, so an identical first prompt in a new session can hit cache.
+- A bounded 256-entry, one-hour exact-response fallback preserves successful replies and token usage. It is used only if LiteLLM cannot read its cached response, so a bad cache entry does not turn a repeat request into a 503.
 - Cache responses retain the original reply and per-request token usage, report `LLM_CACHE`, set `key_id` to null, and reset `fallback_attempts` to zero.
 - The local cache is process-local. The backend intentionally uses one worker; no paid or external cache service is required.
 

@@ -28,8 +28,10 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("DEFAULT_SYSTEM_PROMPT", "You are a small business assistant.")
     monkeypatch.setattr(main, "initialize_litellm", lambda: True)
     monkeypatch.setattr(main, "cache_is_ready", lambda: True)
+    main.response_cache.clear()
     with TestClient(main.app) as test_client:
         yield test_client
+    main.response_cache.clear()
 
 
 def test_health_reports_database_keys_and_cache(client):
@@ -105,13 +107,13 @@ def test_multi_turn_history_is_stored_oldest_first_and_keeps_session_isolated(
 
 
 def test_same_first_prompt_in_new_session_can_use_exact_cache(client, monkeypatch):
-    seen_messages = []
+    calls = []
 
     async def fake_complete(**kwargs):
-        key = repr((kwargs["model"], kwargs["messages"]))
-        seen_messages.append(key)
-        cached = len([value for value in seen_messages if value == key]) > 1
-        return response("A Sunday site visit can be arranged.", cache_hit=cached)
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return response("A Sunday site visit can be arranged.")
+        raise RuntimeError("cached response could not be decoded")
 
     monkeypatch.setattr(main, "complete", fake_complete)
     prompt = "Can I book a site visit on Sunday?"
@@ -124,6 +126,25 @@ def test_same_first_prompt_in_new_session_can_use_exact_cache(client, monkeypatc
     assert second["metadata"]["resolution_source"] == "LLM_CACHE"
     assert second["metadata"]["key_id"] is None
     assert second["metadata"]["fallback_attempts"] == 0
+    assert len(calls) == 2
+
+
+def test_exact_response_cache_key_includes_model_and_full_message_list(client):
+    from app.response_cache import exact_request_key
+
+    system = {"role": "system", "content": "Be concise."}
+    first = [system, {"role": "user", "content": "Define API."}]
+    follow_up = [*first, {"role": "assistant", "content": "An API connects software."}]
+
+    assert exact_request_key("gemini/model-a", first) == exact_request_key(
+        "gemini/model-a", first
+    )
+    assert exact_request_key("gemini/model-a", first) != exact_request_key(
+        "gemini/model-b", first
+    )
+    assert exact_request_key("gemini/model-a", first) != exact_request_key(
+        "gemini/model-a", follow_up
+    )
 
 
 @pytest.mark.parametrize("status", [429, 500, 502, 503])
