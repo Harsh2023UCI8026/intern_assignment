@@ -174,6 +174,7 @@ For a live smoke check, use `Invoke-RestMethod http://localhost:8000/health`, se
 ## 6. Bonus features (if any)
 
 - A responsive Lyftr-inspired operations console rather than a plain chat window.
+- Independently collapsible Tools and Insights sidebars, with compact mobile controls and slide-in drawers.
 - Customer scenario starters for real estate, clinic scheduling, and order support, including Hindi/Hinglish examples.
 - One-click cache replay, key failover, and all-keys-down flows using the assignment's API contract.
 - Per-reply source/model/latency/token telemetry, fallback metadata, and readable error states.

@@ -18,6 +18,10 @@ import {
   LoaderCircle,
   MessageCircle,
   MessageSquareText,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
   Plus,
   Send,
   Settings2,
@@ -157,6 +161,8 @@ function App() {
   const [draft, setDraft] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [promptOpen, setPromptOpen] = useState(false);
+  const [leftSidebarExpanded, setLeftSidebarExpanded] = useState(false);
+  const [rightSidebarExpanded, setRightSidebarExpanded] = useState(false);
   const [health, setHealth] = useState<Health | null>(null);
   const [healthLoading, setHealthLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -387,8 +393,47 @@ function App() {
           </div>
         )}
 
-        <div className="workspace-grid">
-          <aside className="left-column">
+        <div className={`workspace-grid ${leftSidebarExpanded ? "left-expanded" : "left-collapsed"} ${rightSidebarExpanded ? "right-expanded" : "right-collapsed"}`}>
+          <aside
+            className={`left-column sidebar left-sidebar ${leftSidebarExpanded ? "is-expanded" : "is-collapsed"}`}
+            aria-label="Conversation tools"
+            onKeyDown={(event) => {
+              if (event.key === "Escape") setLeftSidebarExpanded(false);
+            }}
+          >
+            <button
+              className="sidebar-scrim"
+              type="button"
+              tabIndex={leftSidebarExpanded ? 0 : -1}
+              aria-label="Close conversation tools"
+              onClick={() => setLeftSidebarExpanded(false)}
+            />
+            <div className="sidebar-rail">
+              <button
+                className="sidebar-rail-toggle"
+                type="button"
+                aria-label={leftSidebarExpanded ? "Collapse conversation tools" : "Expand conversation tools"}
+                aria-controls="left-sidebar-content"
+                aria-expanded={leftSidebarExpanded}
+                title={leftSidebarExpanded ? "Collapse tools" : "Expand tools"}
+                onClick={() => setLeftSidebarExpanded((expanded) => !expanded)}
+              >
+                <PanelLeftOpen size={19} />
+                <span>Tools</span>
+              </button>
+              <div className="sidebar-rail-icons" aria-hidden="true">
+                <Sparkles size={16} />
+                <Zap size={16} />
+              </div>
+            </div>
+            <div id="left-sidebar-content" className="sidebar-expanded-content" aria-hidden={!leftSidebarExpanded}>
+              <div className="sidebar-expanded-heading">
+                <div><small>WORKSPACE</small><strong>Quick tools</strong></div>
+                <button className="sidebar-collapse-button" type="button" aria-label="Collapse conversation tools" onClick={() => setLeftSidebarExpanded(false)}>
+                  <PanelLeftClose size={17} />
+                </button>
+              </div>
+              <div className="sidebar-panels">
             <div className="panel panel-playbook">
               <div className="panel-heading">
                 <div>
@@ -471,6 +516,8 @@ function App() {
 
             <div className="privacy-note">
               <ShieldCheck size={16} /> <span>Keys stay server-side. They never reach the browser.</span>
+            </div>
+              </div>
             </div>
           </aside>
 
@@ -579,7 +626,47 @@ function App() {
             </div>
           </section>
 
-          <aside className="right-column" id="reliability">
+          <aside
+            className={`right-column sidebar right-sidebar ${rightSidebarExpanded ? "is-expanded" : "is-collapsed"}`}
+            id="reliability"
+            aria-label="Reliability insights"
+            onKeyDown={(event) => {
+              if (event.key === "Escape") setRightSidebarExpanded(false);
+            }}
+          >
+            <button
+              className="sidebar-scrim"
+              type="button"
+              tabIndex={rightSidebarExpanded ? 0 : -1}
+              aria-label="Close reliability insights"
+              onClick={() => setRightSidebarExpanded(false)}
+            />
+            <div className="sidebar-rail">
+              <button
+                className="sidebar-rail-toggle"
+                type="button"
+                aria-label={rightSidebarExpanded ? "Collapse reliability insights" : "Expand reliability insights"}
+                aria-controls="right-sidebar-content"
+                aria-expanded={rightSidebarExpanded}
+                title={rightSidebarExpanded ? "Collapse insights" : "Expand insights"}
+                onClick={() => setRightSidebarExpanded((expanded) => !expanded)}
+              >
+                <PanelRightOpen size={19} />
+                <span>Insights</span>
+              </button>
+              <div className="sidebar-rail-icons" aria-hidden="true">
+                <Activity size={16} />
+                <Database size={16} />
+              </div>
+            </div>
+            <div id="right-sidebar-content" className="sidebar-expanded-content" aria-hidden={!rightSidebarExpanded}>
+              <div className="sidebar-expanded-heading">
+                <div><small>OBSERVABILITY</small><strong>System insights</strong></div>
+                <button className="sidebar-collapse-button" type="button" aria-label="Collapse reliability insights" onClick={() => setRightSidebarExpanded(false)}>
+                  <PanelRightClose size={17} />
+                </button>
+              </div>
+              <div className="sidebar-panels">
             <div className="panel health-panel">
               <div className="panel-heading">
                 <div>
@@ -639,6 +726,8 @@ function App() {
               <a href="https://lyftr.ai/about" target="_blank" rel="noreferrer" aria-label="Learn about Lyftr AI"><ArrowUpRight size={16} /></a>
             </div>
             <div className="footer-meta"><span><BookOpen size={13} /> Assignment workspace</span><span>v1.0</span></div>
+              </div>
+            </div>
           </aside>
         </div>
       </main>
