@@ -23,7 +23,7 @@ def response(text: str, *, cache_hit: bool = False, input_tokens: int = 42):
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'app.db'}")
     monkeypatch.setenv("LLM_API_KEYS", "first-test-key,second-test-key")
-    monkeypatch.setenv("LLM_MODEL", "gemini/gemini-3.6-flash")
+    monkeypatch.setenv("LLM_MODEL", "gemini/gemini-3.5-flash-lite")
     monkeypatch.setenv("ENABLE_FAILURE_SIMULATION", "true")
     monkeypatch.setenv("DEFAULT_SYSTEM_PROMPT", "You are a small business assistant.")
     monkeypatch.setattr(main, "initialize_litellm", lambda: True)
@@ -153,7 +153,7 @@ def test_simulated_provider_status_fails_over_and_reports_the_winning_key(
     assert simulated_statuses == [status, None]
 
 
-@pytest.mark.parametrize("status", [408, 429, 500, 502, 503])
+@pytest.mark.parametrize("status", [400, 401, 403, 408, 429, 500, 502, 503])
 def test_provider_http_error_fails_over_without_simulation_header(
     client, monkeypatch, status
 ):
@@ -268,7 +268,55 @@ def test_per_key_simulation_statuses_can_fail_the_entire_pool(client, monkeypatc
 
     assert result.status_code == 503
     assert result.json() == {"detail": "all providers unavailable"}
+    assert result.headers["x-provider-failure"] == "simulated_failure"
     assert client.get("/sessions/mixed-failures/messages").status_code == 404
+
+
+def test_temporary_outage_gets_one_short_retry(client, monkeypatch):
+    calls = []
+
+    class ProviderHTTPError(Exception):
+        def __init__(self, status_code):
+            super().__init__(f"provider HTTP {status_code}")
+            self.status_code = status_code
+
+    async def no_wait(_seconds):
+        return None
+
+    async def fake_complete(**kwargs):
+        calls.append(kwargs["api_key"])
+        if len(calls) <= 2:
+            raise ProviderHTTPError(503)
+        return response("Recovered after the provider came back.")
+
+    monkeypatch.setattr(main, "complete", fake_complete)
+    monkeypatch.setattr(main, "async_sleep", no_wait)
+    monkeypatch.setattr(main.random, "uniform", lambda _low, _high: 0.25)
+    result = client.post(
+        "/chat", json={"session_id": "transient-outage", "message": "Hello"}
+    )
+
+    assert result.status_code == 200
+    assert result.json()["reply"] == "Recovered after the provider came back."
+    assert result.json()["metadata"]["key_id"] == "key_1"
+    assert calls == ["first-test-key", "second-test-key", "first-test-key"]
+
+
+def test_provider_failure_exposes_only_a_safe_classification(client, monkeypatch):
+    class InvalidKey(Exception):
+        status_code = 401
+
+    async def fake_complete(**kwargs):
+        raise InvalidKey("API key not valid; secret contents are redacted")
+
+    monkeypatch.setattr(main, "complete", fake_complete)
+    result = client.post(
+        "/chat", json={"session_id": "invalid-keys", "message": "Hello"}
+    )
+
+    assert result.status_code == 503
+    assert result.json() == {"detail": "all providers unavailable"}
+    assert result.headers["x-provider-failure"] == "invalid_api_key"
 
 
 @pytest.mark.parametrize(

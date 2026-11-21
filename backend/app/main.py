@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import logging
+import random
 import time
 import uuid
+from asyncio import sleep as async_sleep
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -26,7 +28,6 @@ from .llm import (
     complete,
     initialize_litellm,
     is_cache_hit,
-    is_retryable_provider_error,
     provider_status_code,
     response_text,
     token_usage,
@@ -62,6 +63,7 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "X-Simulate-Failure"],
+    expose_headers=["X-Request-ID", "X-Provider-Failure"],
 )
 
 
@@ -152,19 +154,36 @@ def _parse_simulation_header(
     return failures
 
 
-def _text_for_error(error: Exception) -> str:
+def _provider_failure_kind(error: Exception) -> str:
+    if isinstance(error, SimulatedProviderFailure):
+        return "simulated_failure"
     status = provider_status_code(error)
+    message = str(error).casefold()
+    error_name = type(error).__name__.casefold()
+    if status in {401, 403} or any(
+        phrase in message
+        for phrase in ("invalid api key", "api key not valid", "api_key_invalid")
+    ):
+        return "invalid_api_key"
+    if status == 404 or any(
+        phrase in message
+        for phrase in ("model not found", "model_not_found", "unsupported model")
+    ):
+        return "model_unavailable"
+    if status == 429 or any(
+        phrase in message for phrase in ("quota", "resource_exhausted", "rate limit")
+    ):
+        return "quota_or_rate_limit"
     if (
         status == 408
         or isinstance(error, TimeoutError)
-        or "timeout" in type(error).__name__.lower()
+        or "timeout" in error_name
+        or "timed out" in message
     ):
-        return "provider request timed out"
-    if status == 429 or "quota" in str(error).lower():
-        return "provider quota or rate limit reached"
-    if status is not None and status >= 500:
-        return f"provider returned HTTP {status}"
-    return type(error).__name__
+        return "provider_timeout"
+    if status is not None and 500 <= status <= 599:
+        return "provider_unavailable"
+    return "provider_error"
 
 
 @app.get("/health")
@@ -215,6 +234,7 @@ async def chat(
 
     started = time.perf_counter()
     fallback_attempts = 0
+    failure_kinds: list[str] = []
     answer: str | None = None
     final_model = settings.model
     winning_key_id: str | None = None
@@ -246,27 +266,74 @@ async def chat(
                 winning_key_id = key_id
             break
         except Exception as error:
-            if index + 1 < len(settings.api_keys) and (
-                isinstance(error, SimulatedProviderFailure)
-                or is_retryable_provider_error(error)
-            ):
-                fallback_attempts += 1
-                continue
+            failure_kind = _provider_failure_kind(error)
+            failure_kinds.append(failure_kind)
             logger.warning(
                 json.dumps(
                     {
                         "event": "llm_attempt_failed",
                         "key_id": key_id,
                         "status": provider_status_code(error),
-                        "error": _text_for_error(error),
+                        "classification": failure_kind,
                     },
                     separators=(",", ":"),
                 )
             )
+            # Keys can have different permissions or project quotas. Try the
+            # remaining pool even for auth/model errors, without logging details.
+            if index + 1 < len(settings.api_keys):
+                fallback_attempts += 1
+                continue
             break
 
     if answer is None:
-        raise HTTPException(status_code=503, detail="all providers unavailable")
+        if not simulated_failures and any(
+            kind in {"provider_timeout", "provider_unavailable"}
+            for kind in failure_kinds
+        ):
+            await async_sleep(random.uniform(0.2, 0.45))
+            retry_key = settings.api_keys[0]
+            try:
+                result = await complete(
+                    model=settings.model,
+                    api_key=retry_key,
+                    messages=messages,
+                    caching=True,
+                    timeout_seconds=min(5.0, settings.request_timeout_seconds),
+                )
+                answer = response_text(result)
+                if not answer:
+                    raise RuntimeError("provider returned an empty response")
+                input_tokens, output_tokens = token_usage(result)
+                if is_cache_hit(result):
+                    metadata_source = "LLM_CACHE"
+                    winning_key_id = None
+                    fallback_attempts = 0
+                else:
+                    winning_key_id = "key_1"
+                    fallback_attempts = max(fallback_attempts, len(settings.api_keys) - 1)
+            except Exception as error:
+                failure_kind = _provider_failure_kind(error)
+                failure_kinds.append(failure_kind)
+                logger.warning(
+                    json.dumps(
+                        {
+                            "event": "llm_transient_retry_failed",
+                            "key_id": "key_1",
+                            "status": provider_status_code(error),
+                            "classification": failure_kind,
+                        },
+                        separators=(",", ":"),
+                    )
+                )
+
+        if answer is None:
+            failure_kind = failure_kinds[-1] if failure_kinds else "provider_error"
+            raise HTTPException(
+                status_code=503,
+                detail="all providers unavailable",
+                headers={"X-Provider-Failure": failure_kind},
+            )
 
     latency_ms = int((time.perf_counter() - started) * 1000)
     metadata = {

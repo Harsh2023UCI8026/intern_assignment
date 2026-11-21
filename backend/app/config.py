@@ -32,14 +32,14 @@ def get_settings() -> Settings:
     )
     return Settings(
         database_url=os.getenv("DATABASE_URL", "sqlite:///./data/app.db"),
-        model=os.getenv("LLM_MODEL", "gemini/gemini-3.6-flash"),
+        model=os.getenv("LLM_MODEL", "gemini/gemini-3.5-flash-lite"),
         api_keys=keys,
         allowed_origins=origins,
         failure_simulation_enabled=os.getenv(
             "ENABLE_FAILURE_SIMULATION", "false"
         ).lower()
         in {"1", "true", "yes", "on"},
-        request_timeout_seconds=float(os.getenv("LLM_TIMEOUT_SECONDS", "20")),
+        request_timeout_seconds=float(os.getenv("LLM_TIMEOUT_SECONDS", "15")),
         default_system_prompt=os.getenv(
             "DEFAULT_SYSTEM_PROMPT",
             "You are a helpful, concise AI assistant for an Indian small business. "

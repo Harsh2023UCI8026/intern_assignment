@@ -22,6 +22,7 @@ import {
   PanelRightClose,
   PanelRightOpen,
   Plus,
+  RotateCw,
   Send,
   Settings2,
   ShieldCheck,
@@ -55,6 +56,7 @@ type ChatMessage = {
   time?: string;
   metadata?: ReplyMetadata;
   tone?: "error" | "success";
+  retryText?: string;
 };
 type Health = {
   status: string;
@@ -122,7 +124,23 @@ async function readError(response: Response): Promise<string> {
     const body = await response.json();
     if (typeof body.detail === "string") {
       if (body.detail === "all providers unavailable") {
-        return "AI providers are temporarily unavailable. Please retry shortly; this turn was not saved.";
+        const providerFailure = response.headers.get("X-Provider-Failure");
+        const messages: Record<string, string> = {
+          quota_or_rate_limit:
+            "Gemini is rate-limited right now. Check AI Studio usage; keys in the same Google project share its free quota. This turn was not saved.",
+          invalid_api_key:
+            "Gemini rejected a backend key. Check LLM_API_KEYS in the backend service settings. This turn was not saved.",
+          model_unavailable:
+            "The configured Gemini model is unavailable to this project. Set LLM_MODEL to gemini/gemini-3.5-flash-lite. This turn was not saved.",
+          provider_timeout:
+            "Gemini did not respond before the timeout. The request was retried once; this turn was not saved.",
+          provider_unavailable:
+            "Gemini is temporarily unavailable. The request was retried once; this turn was not saved.",
+          simulated_failure:
+            "The failure demo intentionally took every configured key offline. No message was saved.",
+        };
+        return messages[providerFailure || ""] ||
+          "AI providers are temporarily unavailable. Please retry shortly; this turn was not saved.";
       }
       return body.detail;
     }
@@ -213,16 +231,18 @@ function App() {
   const sendMessage = useCallback(
     async (
       text: string,
-      options?: { sessionId?: string; simulatedFailure?: string },
+      options?: { sessionId?: string; simulatedFailure?: string; retry?: boolean },
     ) => {
       const trimmed = text.trim();
       if (!trimmed || sending) return;
       const targetSession = options?.sessionId || sessionId;
       setSending(true);
-      setMessages((current) => [
-        ...current,
-        { id: makeId(), role: "user", content: trimmed, time: formatTime() },
-      ]);
+      if (!options?.retry) {
+        setMessages((current) => [
+          ...current,
+          { id: makeId(), role: "user", content: trimmed, time: formatTime() },
+        ]);
+      }
       setDraft("");
       if (textAreaRef.current) textAreaRef.current.style.height = "auto";
 
@@ -244,6 +264,7 @@ function App() {
         });
         if (!response.ok) {
           const detail = await readError(response);
+          const providerFailure = response.headers.get("X-Provider-Failure");
           setMessages((current) => [
             ...current,
             {
@@ -252,6 +273,11 @@ function App() {
               content: detail,
               time: formatTime(),
               tone: "error",
+              retryText:
+                providerFailure !== "simulated_failure" &&
+                (response.status === 429 || response.status >= 500)
+                  ? trimmed
+                  : undefined,
             },
           ]);
           return;
@@ -281,6 +307,7 @@ function App() {
             content: "Could not reach the API. Check the backend URL and try again.",
             time: formatTime(),
             tone: "error",
+            retryText: trimmed,
           },
         ]);
       } finally {
@@ -542,7 +569,12 @@ function App() {
                   <>
                     <div className="day-divider"><span /> TODAY <span /></div>
                     {messages.map((message) => (
-                      <MessageRow key={message.id} message={message} />
+                      <MessageRow
+                        key={message.id}
+                        message={message}
+                        onRetry={message.retryText ? () => void sendMessage(message.retryText!, { retry: true }) : undefined}
+                        sending={sending}
+                      />
                     ))}
                     {sending && (
                       <div className="typing-row" aria-live="polite">
@@ -729,12 +761,28 @@ function HealthRow({
   );
 }
 
-function MessageRow({ message }: { message: ChatMessage }) {
+function MessageRow({
+  message,
+  onRetry,
+  sending,
+}: {
+  message: ChatMessage;
+  onRetry?: () => void;
+  sending: boolean;
+}) {
   if (message.role === "notice") {
     return (
       <div className={`notice-message ${message.tone || "error"}`} role="alert">
         <span className="notice-icon">{message.tone === "success" ? <Check size={15} /> : <TriangleAlert size={15} />}</span>
-        <div><strong>{message.tone === "success" ? "Request completed" : "Could not complete this request"}</strong><p>{message.content}</p></div>
+        <div>
+          <strong>{message.tone === "success" ? "Request completed" : "Could not complete this request"}</strong>
+          <p>{message.content}</p>
+          {message.retryText && onRetry && (
+            <button className="notice-retry" type="button" onClick={onRetry} disabled={sending}>
+              <RotateCw size={13} /> Try again
+            </button>
+          )}
+        </div>
       </div>
     );
   }

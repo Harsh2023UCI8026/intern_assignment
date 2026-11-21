@@ -67,7 +67,7 @@ Docker Desktop and its Linux engine must be running. Node.js and Python do not n
 
 ### Free-tier API setup
 
-The default model is `gemini/gemini-3.6-flash`, which Google currently lists with free-tier access. Free-tier model access and quotas can change or vary by project; check the [current pricing](https://ai.google.dev/gemini-api/docs/pricing) and [active rate limits](https://ai.google.dev/gemini-api/docs/rate-limits). The two keys satisfy the assignment's fallback contract; separate keys in one Google project do not multiply that project's quota. If a free-tier request is rate-limited, wait and retry rather than enabling paid billing.
+The default model is `gemini/gemini-3.5-flash-lite`, Google's cost-efficient model for high-throughput tasks; its current standard input/output pricing lists free-tier access. The app tries every configured key after a provider failure, retries one short timeout/5xx outage once, and shows a safe failure category with a retry action. Free-tier access and quotas can vary by project; check [current pricing](https://ai.google.dev/gemini-api/docs/pricing) and [active rate limits](https://ai.google.dev/gemini-api/docs/rate-limits). Gemini limits apply per Google project, so multiple keys from the same project do not multiply its quota. If a daily free quota is exhausted, wait for it to reset; do not enable paid billing just to clear the error.
 
 ### Free public deployment on Railway
 
@@ -81,9 +81,9 @@ Create two services from `Harsh2023UCI8026/intern_assignment`, both tracking `ma
    ```dotenv
    DATABASE_URL=sqlite:////data/app.db
    LLM_API_KEYS=<two free Gemini keys separated by a comma>
-   LLM_MODEL=gemini/gemini-3.6-flash
+   LLM_MODEL=gemini/gemini-3.5-flash-lite
    ENABLE_FAILURE_SIMULATION=true
-   LLM_TIMEOUT_SECONDS=20
+   LLM_TIMEOUT_SECONDS=15
    DEFAULT_SYSTEM_PROMPT=You are a helpful assistant for an Indian small business. Reply in the customer's language.
    ```
 
