@@ -17,7 +17,6 @@ import {
   KeyRound,
   LoaderCircle,
   MessageCircle,
-  MessageSquareText,
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
@@ -335,51 +334,49 @@ function App() {
           <img className="brand-logo" src="/lyftr-logo.jpg" alt="" aria-hidden="true" />
           <span className="brand-copy">
             <strong>Lyftr AI</strong>
-            <small>Conversation workspace</small>
+            <small>Customer conversations</small>
           </span>
         </a>
 
-        <nav className="top-nav" aria-label="Workspace">
-          <a className="nav-item active" href="#conversation">
-            <MessageSquareText size={16} /> Conversations
-          </a>
-          <a className="nav-item" href="#reliability">
-            <Activity size={16} /> Reliability
-          </a>
-        </nav>
-
         <div className="top-actions">
-          <a className="help-link" href="https://lyftr.ai/about" target="_blank" rel="noreferrer">
-            <CircleHelp size={16} /> About Lyftr
-          </a>
+          <div className={`connection-pill ${healthLoading ? "is-loading" : healthIsReady ? "is-ready" : "is-offline"}`}>
+            <span className="connection-dot" />
+            <span>{healthLoading ? "Checking" : healthIsReady ? "Ready" : "Needs attention"}</span>
+            <button className="icon-button refresh-button" onClick={() => void refreshHealth()} aria-label="Refresh system status">
+              <Activity size={15} />
+            </button>
+          </div>
+          <button
+            className={`prompt-toggle ${promptOpen ? "is-active" : ""}`}
+            type="button"
+            aria-expanded={promptOpen}
+            aria-controls="system-prompt-bar"
+            onClick={() => setPromptOpen((open) => !open)}
+          >
+            <Settings2 size={15} /> <span>System prompt</span>
+          </button>
           <button className="button button-primary button-small" onClick={() => startNewConversation()}>
-            <Plus size={16} strokeWidth={2.4} /> New conversation
+            <Plus size={16} strokeWidth={2.4} /> <span>New conversation</span>
           </button>
         </div>
       </header>
 
       <main className="workspace">
-        <section className="page-intro">
-          <div className="intro-copy">
-            <div className="eyebrow">
-              <span className="eyebrow-dot" /> AI FRONT DESK <span className="eyebrow-divider">/</span> ASSIGNMENT BUILD
-            </div>
-            <h1>
-              Every lead gets an <span>answer.</span>
-            </h1>
-            <p>
-              A dependable conversation layer for Indian businesses—built for multilingual
-              customer support, even when a provider is not.
-            </p>
-          </div>
-          <div className={`connection-pill ${healthLoading ? "is-loading" : healthIsReady ? "is-ready" : "is-offline"}`}>
-            <span className="connection-dot" />
-            <span>{healthLoading ? "Checking system" : healthIsReady ? "System operational" : "Action needed"}</span>
-            <button className="icon-button refresh-button" onClick={() => void refreshHealth()} aria-label="Refresh system status">
-              <Activity size={15} />
-            </button>
-          </div>
-        </section>
+        {promptOpen && (
+          <section className="prompt-bar" id="system-prompt-bar" aria-label="System prompt settings">
+            <label htmlFor="system-prompt-input">System prompt <span>Optional · applies to this session</span></label>
+            <textarea
+              id="system-prompt-input"
+              data-testid="system-prompt-input"
+              value={systemPrompt}
+              onChange={(event) => setSystemPrompt(event.target.value)}
+              placeholder="For example: Reply warmly and keep answers concise."
+              maxLength={4000}
+              rows={1}
+            />
+            <button type="button" className="prompt-done" onClick={() => setPromptOpen(false)} aria-label="Close system prompt">Done</button>
+          </section>
+        )}
 
         {notice && (
           <div className="toast" role="status">
@@ -414,7 +411,7 @@ function App() {
                 onClick={() => setLeftSidebarExpanded((expanded) => !expanded)}
               >
                 <PanelLeftOpen size={19} />
-                <span>Tools</span>
+                <span>Examples</span>
               </button>
               <div className="sidebar-rail-icons" aria-hidden="true">
                 <Sparkles size={16} />
@@ -461,23 +458,8 @@ function App() {
                 })}
               </div>
               <button className="text-button scenario-link" onClick={() => setPromptOpen((open) => !open)}>
-                <Settings2 size={15} /> Tune this assistant <ChevronDown className={promptOpen ? "chevron-open" : ""} size={15} />
+                <Settings2 size={15} /> System prompt <ChevronDown className={promptOpen ? "chevron-open" : ""} size={15} />
               </button>
-              {promptOpen && (
-                <div className="prompt-editor">
-                  <label htmlFor="system-prompt">System prompt <span>OPTIONAL</span></label>
-                  <textarea
-                    id="system-prompt"
-                    data-testid="system-prompt-input"
-                    value={systemPrompt}
-                    onChange={(event) => setSystemPrompt(event.target.value)}
-                    placeholder="Set the assistant’s role and tone for this session…"
-                    maxLength={4000}
-                    rows={4}
-                  />
-                  <small>Saved with this session after the first successful reply.</small>
-                </div>
-              )}
             </div>
 
             <div className="panel panel-demo">
@@ -545,18 +527,15 @@ function App() {
                 {messages.length === 0 ? (
                   <div className="empty-state">
                     <div className="empty-illustration">
-                      <div className="empty-orbit orbit-one" />
-                      <div className="empty-orbit orbit-two" />
-                      <div className="empty-bubble"><Sparkles size={26} /></div>
-                      <span className="orbit-dot dot-blue" />
-                      <span className="orbit-dot dot-green" />
+                      <div className="empty-bubble"><Sparkles size={22} /></div>
                     </div>
-                    <div className="empty-kicker"><span /> LIVE AI ASSISTANT</div>
-                    <h3>Ready when your next customer is.</h3>
-                    <p>Start with a scenario on the left, or write a message below. The assistant keeps context for this session.</p>
+                    <div className="empty-kicker"><span /> READY FOR A NEW CONVERSATION</div>
+                    <h3>What should we help you reply to?</h3>
+                    <p>Choose a starting point or write your own message. The assistant will keep the conversation context.</p>
                     <div className="suggestion-row">
-                      <button onClick={() => setDraft("Can you help me book a product demo this week?")}>Book a demo <ArrowUpRight size={13} /></button>
-                      <button onClick={() => setDraft("Mujhe apna budget bata kar sahi option chahiye.")}>Ask in Hinglish <ArrowUpRight size={13} /></button>
+                      {scenarios.map((scenario) => (
+                        <button key={scenario.title} onClick={() => setDraft(scenario.message)}>{scenario.title} <ArrowUpRight size={13} /></button>
+                      ))}
                     </div>
                   </div>
                 ) : (
@@ -647,7 +626,7 @@ function App() {
                 onClick={() => setRightSidebarExpanded((expanded) => !expanded)}
               >
                 <PanelRightOpen size={19} />
-                <span>Insights</span>
+                <span>Health</span>
               </button>
               <div className="sidebar-rail-icons" aria-hidden="true">
                 <Activity size={16} />
