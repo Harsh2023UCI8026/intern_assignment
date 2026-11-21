@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .config import get_settings
+from .config import ensure_english_system_prompt, get_settings
 from .database import (
     database_is_ready,
     initialize_database,
@@ -222,11 +222,13 @@ async def chat(
     )
     session_exists, saved_prompt, history = load_session_context(payload.session_id)
     prompt_was_overridden = payload.system_prompt is not None
-    system_prompt = (
+    selected_prompt = (
         payload.system_prompt
         if prompt_was_overridden
         else (saved_prompt if session_exists and saved_prompt else settings.default_system_prompt)
     )
+    system_prompt = ensure_english_system_prompt(selected_prompt)
+    prompt_was_overridden = prompt_was_overridden or system_prompt != selected_prompt
     messages = [
         {"role": "system", "content": system_prompt},
         *history,

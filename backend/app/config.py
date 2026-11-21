@@ -1,8 +1,29 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
+
+
+_ENGLISH_LANGUAGE_POLICY = (
+    "Always reply in clear, natural English unless the customer explicitly asks "
+    "for another language."
+)
+_CUSTOMER_LANGUAGE_RULE = re.compile(
+    r"(?:respond|reply)\s+in\s+(?:the\s+)?"
+    r"(?:language(?:\s+and\s+tone)?\s+used\s+by\s+(?:the\s+)?customer|"
+    r"(?:the\s+)?customer['’]s\s+language)\.?",
+    re.IGNORECASE,
+)
+
+
+def ensure_english_system_prompt(prompt: str) -> str:
+    """Keep legacy/configured prompts in English unless a customer asks otherwise."""
+    prompt = _CUSTOMER_LANGUAGE_RULE.sub(_ENGLISH_LANGUAGE_POLICY, prompt)
+    if _ENGLISH_LANGUAGE_POLICY.casefold() not in prompt.casefold():
+        prompt = f"{prompt.rstrip()} {_ENGLISH_LANGUAGE_POLICY}"
+    return prompt
 
 
 @dataclass(frozen=True)
@@ -40,15 +61,14 @@ def get_settings() -> Settings:
         ).lower()
         in {"1", "true", "yes", "on"},
         request_timeout_seconds=float(os.getenv("LLM_TIMEOUT_SECONDS", "15")),
-        default_system_prompt=os.getenv(
-            "DEFAULT_SYSTEM_PROMPT",
-            "You are a helpful, concise AI assistant for an Indian small business. "
-            "Always reply in clear, natural English, even if the customer writes in "
-            "another language. Switch languages only when the customer explicitly "
-            "asks you to. Ask one clear "
-            "follow-up question when a request needs more information, and never "
-            "claim that a booking, payment, or human handoff has happened unless "
-            "the connected system confirms it.",
+        default_system_prompt=ensure_english_system_prompt(
+            os.getenv(
+                "DEFAULT_SYSTEM_PROMPT",
+                "You are a helpful, concise AI assistant for an Indian small business. "
+                "Ask one clear follow-up question when a request needs more "
+                "information, and never claim that a booking, payment, or human "
+                "handoff has happened unless the connected system confirms it.",
+            )
         ),
     )
 

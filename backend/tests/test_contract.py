@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import main
+from app.config import get_settings
 from app.llm import SimulatedProviderFailure
 
 
@@ -60,6 +61,48 @@ def test_cors_preflight_allows_frontend_and_simulation_header(client):
     assert result.status_code == 200
     assert result.headers["access-control-allow-origin"] == "http://localhost:3000"
     assert "x-simulate-failure" in result.headers["access-control-allow-headers"].lower()
+
+
+def test_legacy_environment_prompt_is_normalized_to_english(client, monkeypatch):
+    monkeypatch.setenv(
+        "DEFAULT_SYSTEM_PROMPT",
+        "You are helpful. Reply in the customer's language.",
+    )
+
+    prompt = get_settings().default_system_prompt
+
+    assert "Always reply in clear, natural English" in prompt
+    assert "Reply in the customer's language" not in prompt
+
+
+def test_legacy_saved_session_prompt_is_upgraded_to_english(client, monkeypatch):
+    loaded_prompt = "You are helpful. Respond in the language and tone used by the customer."
+    original_load_session_context = main.load_session_context
+    observed_prompts = []
+
+    monkeypatch.setattr(
+        main,
+        "load_session_context",
+        lambda _session_id: (True, loaded_prompt, []),
+    )
+
+    async def fake_complete(**kwargs):
+        observed_prompts.append(kwargs["messages"][0]["content"])
+        return response("An API lets software systems communicate.")
+
+    monkeypatch.setattr(main, "complete", fake_complete)
+    result = client.post(
+        "/chat",
+        json={"session_id": "legacy-language-session", "message": "Define an API."},
+    )
+
+    assert result.status_code == 200
+    assert "Always reply in clear, natural English" in observed_prompts[0]
+    assert "language and tone used by the customer" not in observed_prompts[0]
+    assert (
+        original_load_session_context("legacy-language-session")[1]
+        == observed_prompts[0]
+    )
 
 
 def test_multi_turn_history_is_stored_oldest_first_and_keeps_session_isolated(
