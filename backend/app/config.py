@@ -43,7 +43,9 @@ def get_settings() -> Settings:
         default_system_prompt=os.getenv(
             "DEFAULT_SYSTEM_PROMPT",
             "You are a helpful, concise AI assistant for an Indian small business. "
-            "Respond in the language and tone used by the customer. Ask one clear "
+            "Always reply in clear, natural English, even if the customer writes in "
+            "another language. Switch languages only when the customer explicitly "
+            "asks you to. Ask one clear "
             "follow-up question when a request needs more information, and never "
             "claim that a booking, payment, or human handoff has happened unless "
             "the connected system confirms it.",
