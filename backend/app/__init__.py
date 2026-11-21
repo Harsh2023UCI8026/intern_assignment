@@ -1,0 +1,2 @@
+"""Lyftr AI assignment backend."""
+
