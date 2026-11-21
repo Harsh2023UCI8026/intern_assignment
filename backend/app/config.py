@@ -39,7 +39,7 @@ def get_settings() -> Settings:
             "ENABLE_FAILURE_SIMULATION", "false"
         ).lower()
         in {"1", "true", "yes", "on"},
-        request_timeout_seconds=float(os.getenv("LLM_TIMEOUT_SECONDS", "45")),
+        request_timeout_seconds=float(os.getenv("LLM_TIMEOUT_SECONDS", "20")),
         default_system_prompt=os.getenv(
             "DEFAULT_SYSTEM_PROMPT",
             "You are a helpful, concise AI assistant for an Indian small business. "

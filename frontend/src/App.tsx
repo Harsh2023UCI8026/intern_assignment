@@ -117,7 +117,12 @@ function formatTime() {
 async function readError(response: Response): Promise<string> {
   try {
     const body = await response.json();
-    if (typeof body.detail === "string") return body.detail;
+    if (typeof body.detail === "string") {
+      if (body.detail === "all providers unavailable") {
+        return "AI providers are temporarily unavailable. Please retry shortly; this turn was not saved.";
+      }
+      return body.detail;
+    }
     if (Array.isArray(body.detail)) {
       const details = body.detail
         .map((issue: { loc?: unknown; msg?: unknown }) => {

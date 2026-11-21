@@ -154,6 +154,12 @@ def _parse_simulation_header(
 
 def _text_for_error(error: Exception) -> str:
     status = provider_status_code(error)
+    if (
+        status == 408
+        or isinstance(error, TimeoutError)
+        or "timeout" in type(error).__name__.lower()
+    ):
+        return "provider request timed out"
     if status == 429 or "quota" in str(error).lower():
         return "provider quota or rate limit reached"
     if status is not None and status >= 500:

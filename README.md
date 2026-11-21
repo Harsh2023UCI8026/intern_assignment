@@ -128,7 +128,7 @@ Set the backend environment variables from `.env` before starting Uvicorn. For a
 ### Key fallback
 
 - `LLM_API_KEYS` is an ordered, comma-separated pool. The app uses LiteLLM with the selected `LLM_MODEL`; provider keys remain server-side.
-- The service retries the next key for simulated failures, HTTP 429/rate-limit/quota errors, and provider 5xx responses. `key_id` is a safe label such as `key_2`; the secret value is never returned or logged.
+- The service retries the next key for simulated failures, HTTP 408 timeouts, HTTP 429/rate-limit/quota errors, and provider 5xx responses. `key_id` is a safe label such as `key_2`; the secret value is never returned or logged.
 - If every key fails, the API returns `503 {"detail":"all providers unavailable"}`. A failed turn is not added to history.
 - `X-Simulate-Failure` is honored only when `ENABLE_FAILURE_SIMULATION=true`. Simulated requests bypass cache reads so the failover can be demonstrated with a real provider answer.
 
@@ -153,7 +153,7 @@ The service exposes exactly the required application routes: `GET /health`, `POS
 
 The backend tests use a mocked provider and make no paid API calls. Run them in Docker with `docker compose run --rm backend pytest -q` or `make test` when GNU Make is available.
 
-The suite covers health readiness, frontend CORS preflight, request validation, multi-turn context, session isolation, oldest-first history, exact cache hits across sessions, simulated 429/500/502/503 fallback, disabled and malformed failure hooks, per-key all-provider failure, metadata fields, and unknown sessions.
+The suite covers health readiness, frontend CORS preflight, request validation, multi-turn context, session isolation, oldest-first history, exact cache hits across sessions, simulated 429/500/502/503 fallback, actual provider-status fallback including 408/timeouts, disabled and malformed failure hooks, per-key all-provider failure, metadata fields, and unknown sessions.
 
 For a live smoke check, use `Invoke-RestMethod http://localhost:8000/health`, send a chat request to `/chat`, then load `/sessions/{session_id}/messages`. The included UI demo buttons also exercise cache replay, key failover, and the clean all-keys-down 503 path.
 

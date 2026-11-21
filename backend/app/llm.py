@@ -98,9 +98,13 @@ def is_retryable_provider_error(error: Exception) -> bool:
     status = provider_status_code(error)
     message = str(error).lower()
     return (
-        status == 429
+        status in {408, 429}
         or (status is not None and 500 <= status <= 599)
         or "quota" in message
         or "rate limit" in message
+        or isinstance(error, TimeoutError)
+        or "timeout" in type(error).__name__.lower()
+        or "timed out" in message
+        or "timeout" in message
     )
 

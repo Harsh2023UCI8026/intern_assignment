@@ -153,7 +153,7 @@ def test_simulated_provider_status_fails_over_and_reports_the_winning_key(
     assert simulated_statuses == [status, None]
 
 
-@pytest.mark.parametrize("status", [429, 500, 502, 503])
+@pytest.mark.parametrize("status", [408, 429, 500, 502, 503])
 def test_provider_http_error_fails_over_without_simulation_header(
     client, monkeypatch, status
 ):
@@ -177,6 +177,26 @@ def test_provider_http_error_fails_over_without_simulation_header(
 
     assert result.status_code == 200
     assert result.json()["reply"] == "A real provider answer after retry."
+    assert result.json()["metadata"]["key_id"] == "key_2"
+    assert result.json()["metadata"]["fallback_attempts"] == 1
+    assert calls == ["first-test-key", "second-test-key"]
+
+
+def test_timeout_exception_without_status_fails_over(client, monkeypatch):
+    calls = []
+
+    async def fake_complete(**kwargs):
+        calls.append(kwargs["api_key"])
+        if kwargs["api_key"] == "first-test-key":
+            raise TimeoutError("request timed out")
+        return response("The second provider answered.")
+
+    monkeypatch.setattr(main, "complete", fake_complete)
+    result = client.post(
+        "/chat", json={"session_id": "timeout-fallback", "message": "Define solid."}
+    )
+
+    assert result.status_code == 200
     assert result.json()["metadata"]["key_id"] == "key_2"
     assert result.json()["metadata"]["fallback_attempts"] == 1
     assert calls == ["first-test-key", "second-test-key"]
