@@ -117,7 +117,20 @@ function formatTime() {
 async function readError(response: Response): Promise<string> {
   try {
     const body = await response.json();
-    return typeof body.detail === "string" ? body.detail : "The request could not be completed.";
+    if (typeof body.detail === "string") return body.detail;
+    if (Array.isArray(body.detail)) {
+      const details = body.detail
+        .map((issue: { loc?: unknown; msg?: unknown }) => {
+          const location = Array.isArray(issue?.loc)
+            ? issue.loc.filter((part) => part !== "body").join(".")
+            : "";
+          const message = typeof issue?.msg === "string" ? issue.msg : "Invalid input";
+          return location ? `${location}: ${message}` : message;
+        })
+        .filter(Boolean);
+      if (details.length) return details.join("; ");
+    }
+    return "The request could not be completed.";
   } catch {
     return "The service returned an unreadable response.";
   }
@@ -146,8 +159,8 @@ function App() {
   const conversationRef = useRef<HTMLDivElement>(null);
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
 
-  const refreshHealth = useCallback(async () => {
-    setHealthLoading(true);
+  const refreshHealth = useCallback(async (showLoading = true) => {
+    if (showLoading) setHealthLoading(true);
     try {
       const response = await fetch(`${API_BASE}/health`, { cache: "no-store" });
       const data = (await response.json()) as Health;
@@ -155,12 +168,14 @@ function App() {
     } catch {
       setHealth(null);
     } finally {
-      setHealthLoading(false);
+      if (showLoading) setHealthLoading(false);
     }
   }, []);
 
   useEffect(() => {
     void refreshHealth();
+    const healthPoll = window.setInterval(() => void refreshHealth(false), 10_000);
+    return () => window.clearInterval(healthPoll);
   }, [refreshHealth]);
 
   useEffect(() => {
@@ -248,7 +263,7 @@ function App() {
             metadata: data.metadata,
           },
         ]);
-        void refreshHealth();
+        void refreshHealth(false);
       } catch {
         setMessages((current) => [
           ...current,
