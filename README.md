@@ -2,7 +2,7 @@
 
 An original full-stack implementation of the Lyftr AI LLM chatbot assignment. The interface takes visual cues from Lyftr AI's public site while using an original operations-console layout for this assignment. It pairs a multilingual SMB conversation with visible cache, fallback, token, latency, SQLite, and failure-simulation details.
 
-This project is configured for free-tier use only: Docker locally, Gemini API free-tier keys, and an OCI Always Free VM for public deployment. Do not enable paid API billing or create paid cloud resources.
+This project is configured for free-tier use only: Docker locally, Gemini API free-tier keys, and Railway's Free plan for public deployment. Railway services sleep while idle and stop when their monthly free usage credit is exhausted. Do not choose a paid plan or enable paid API billing.
 
 ## 1. Live URLs
 
@@ -10,10 +10,10 @@ This project is configured for free-tier use only: Docker locally, Gemini API fr
 | --- | --- |
 | Local frontend | http://localhost:3000 |
 | Local backend | http://localhost:8000 |
-| Public frontend | Add after OCI Always Free deployment |
-| Public backend | Add after OCI Always Free deployment |
+| Public frontend | Add after Railway deployment |
+| Public backend | Add after Railway deployment |
 
-The assignment requires public frontend and backend URLs. They are not published from this workspace yet; OCI account setup and pushing this folder to a public GitHub repository are still required.
+The assignment requires public frontend and backend URLs. They are not published from this workspace yet; a Railway account must be connected to the GitHub repository and the service variables below must be set.
 
 ## 2. Run locally
 
@@ -69,33 +69,30 @@ Docker Desktop and its Linux engine must be running. Node.js and Python do not n
 
 The default model is `gemini/gemini-3.6-flash`, which Google currently lists with free-tier access. Free-tier model access and quotas can change or vary by project; check the [current pricing](https://ai.google.dev/gemini-api/docs/pricing) and [active rate limits](https://ai.google.dev/gemini-api/docs/rate-limits). The two keys satisfy the assignment's fallback contract; separate keys in one Google project do not multiply that project's quota. If a free-tier request is rate-limited, wait and retry rather than enabling paid billing.
 
-### Free public deployment on OCI Always Free
+### Free public deployment on Railway
 
-OCI Always Free provides an Ampere A1 allowance equivalent to 2 OCPUs and 12 GB RAM, and 200 GB of block-volume storage in the account's home region. The free account also includes outbound transfer within its published allowance. Always Free capacity can be unavailable, and Oracle may reclaim an Always Free compute instance if its CPU, network, and (for A1) memory utilization all remain below the published thresholds for seven days. See [Always Free resources](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm), [free-tier account terms](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier.htm), and [OCI free services](https://www.oracle.com/cloud/free/).
+Railway's Free plan is $0/month, requires no card, includes $1/month in usage credit, one persistent 0.5 GB volume, and a generated public domain per service. Services sleep after roughly 5–10 minutes without outbound traffic and wake on the next request; they stop when the monthly credit is exhausted. For new accounts, switch from the one-time Trial to Free after the trial ends and redeploy. Railway documents that Free/Trial volume data can be deleted 30 days after plan expiry, so export important demo history. See [Free plan](https://docs.railway.com/pricing/free-plan), [volumes](https://docs.railway.com/volumes/reference), and [pricing plans/data retention](https://docs.railway.com/pricing/plans).
 
-1. Create an OCI Free Tier account. Choose your home region carefully. Most sign-ups need a phone number and payment card for verification; Oracle says the card is not charged unless you upgrade the account. Do not upgrade. In the cloud console, only create resources labeled **Always Free Eligible**; do not use the temporary trial credits for this deployment.
-2. In the home region, create a VM.Standard.A1.Flex instance with Ubuntu, 1 OCPU, 6 GB RAM, and a public IPv4 address. Use an Always Free-eligible image. If A1 capacity is unavailable, wait or try another availability domain in the same home region; do not switch to a paid shape.
-3. In the VM's security list or network security group, allow inbound TCP `3000` and `8000` from the internet so both assignment tiers are reachable. Restrict SSH TCP `22` to your own IP. Public URLs for this demo use HTTP and the VM's IP; a domain is not required.
-4. Confirm the project is pushed to the public repository, then clone that existing repository onto the VM. Do not run `git init` or create a second remote:
+Create two services from `Harsh2023UCI8026/intern_assignment`, both tracking `main`:
 
-   ```bash
-   git clone https://github.com/Harsh2023UCI8026/intern_assignment.git
-   cd intern_assignment
-   ```
-
-   The local `.env` is ignored by `.gitignore`; never put real provider keys in GitHub.
-5. SSH to the VM using the private key you selected during instance creation, then install Docker Engine and the Compose plugin using [Docker's Ubuntu instructions](https://docs.docker.com/engine/install/ubuntu/).
-6. On the VM, create `.env` from `.env.example`. Set `LLM_API_KEYS` to your two free-tier Gemini keys, and update these two origins to the VM's public IP:
+1. Create a Railway project and add a service from the GitHub repository. In its settings, set **Root Directory** to `/backend`; Railway will use `backend/Dockerfile`.
+2. Add a volume to the backend service mounted at `/data`. Set its variables:
 
    ```dotenv
-   ALLOWED_ORIGINS=http://YOUR_PUBLIC_IP:3000
-   VITE_API_BASE_URL=http://YOUR_PUBLIC_IP:8000
+   DATABASE_URL=sqlite:////data/app.db
+   LLM_API_KEYS=<two free Gemini keys separated by a comma>
+   LLM_MODEL=gemini/gemini-3.6-flash
+   ENABLE_FAILURE_SIMULATION=true
+   LLM_TIMEOUT_SECONDS=20
+   DEFAULT_SYSTEM_PROMPT=You are a helpful assistant for an Indian small business. Reply in the customer's language.
    ```
 
-   Do not commit or share this `.env` file. The API keys stay in the backend environment.
-7. In the repository directory on the VM, run `docker compose up -d --build`. Visit `http://YOUR_PUBLIC_IP:3000` and verify `http://YOUR_PUBLIC_IP:8000/health` returns `status: ok`. SQLite stays in the named `app_data` volume on the VM's boot disk across restarts and image rebuilds. Keep the VM and boot volume while the submission is live.
+   Add the secret keys directly in Railway's Variables UI. Never put them in GitHub or the frontend.
+3. Deploy the backend, open **Settings → Networking**, generate its public domain, and confirm `https://<backend-domain>/health` returns `status: ok`.
+4. Add another service from the same repository. Set **Root Directory** to `/frontend`. In its build variables, set `VITE_API_BASE_URL=https://<backend-domain>` and deploy it. Set the service's public target port to `3000` (the bundled Nginx image listens on that port), then generate its domain.
+5. Update the backend's `ALLOWED_ORIGINS` to exactly `https://<frontend-domain>` and redeploy it. Open the frontend URL and verify chat, cache replay, failover, all-keys-down, and session-history endpoints.
 
-This deployment uses no paid Render service, paid disk, paid domain, or paid API plan. OCI capacity and Gemini's free quota are not guaranteed; never choose paid resources if the free allowance is unavailable.
+Keep both services on the Free plan. The $1 usage allowance is a hard stop rather than unlimited hosting; do not upgrade if it runs out. Fly.io is intentionally not used: its current free trial is limited to 2 VM-hours or 7 days and apps stop until a payment method is added.
 
 ### Without Docker (optional)
 

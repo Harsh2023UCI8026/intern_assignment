@@ -185,8 +185,6 @@ function App() {
 
   useEffect(() => {
     void refreshHealth();
-    const healthPoll = window.setInterval(() => void refreshHealth(false), 10_000);
-    return () => window.clearInterval(healthPoll);
   }, [refreshHealth]);
 
   useEffect(() => {
