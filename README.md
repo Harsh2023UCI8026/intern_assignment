@@ -76,19 +76,15 @@ OCI Always Free provides an Ampere A1 allowance equivalent to 2 OCPUs and 12 GB 
 1. Create an OCI Free Tier account. Choose your home region carefully. Most sign-ups need a phone number and payment card for verification; Oracle says the card is not charged unless you upgrade the account. Do not upgrade. In the cloud console, only create resources labeled **Always Free Eligible**; do not use the temporary trial credits for this deployment.
 2. In the home region, create a VM.Standard.A1.Flex instance with Ubuntu, 1 OCPU, 6 GB RAM, and a public IPv4 address. Use an Always Free-eligible image. If A1 capacity is unavailable, wait or try another availability domain in the same home region; do not switch to a paid shape.
 3. In the VM's security list or network security group, allow inbound TCP `3000` and `8000` from the internet so both assignment tiers are reachable. Restrict SSH TCP `22` to your own IP. Public URLs for this demo use HTTP and the VM's IP; a domain is not required.
-4. Push this project to a **public** GitHub repository. Git is installed on the Windows machine. From the project folder, create an empty repository on GitHub, then run the following once, replacing the URL with your repository URL:
+4. Confirm the project is pushed to the public repository, then clone that existing repository onto the VM. Do not run `git init` or create a second remote:
 
-   ```powershell
-   git init
-   git add .
-   git commit -m "Build resilient Lyftr AI chatbot assignment"
-   git branch -M main
-   git remote add origin https://github.com/YOUR_GITHUB_NAME/lyftr-ai-assignment.git
-   git push -u origin main
+   ```bash
+   git clone https://github.com/Harsh2023UCI8026/intern_assignment.git
+   cd intern_assignment
    ```
 
-   `.env` is ignored by `.gitignore`; check that no real keys are staged before pushing.
-5. SSH to the VM using the private key you selected during instance creation, then install Docker Engine and the Compose plugin using [Docker's Ubuntu instructions](https://docs.docker.com/engine/install/ubuntu/). Clone your public GitHub repository onto the VM.
+   The local `.env` is ignored by `.gitignore`; never put real provider keys in GitHub.
+5. SSH to the VM using the private key you selected during instance creation, then install Docker Engine and the Compose plugin using [Docker's Ubuntu instructions](https://docs.docker.com/engine/install/ubuntu/).
 6. On the VM, create `.env` from `.env.example`. Set `LLM_API_KEYS` to your two free-tier Gemini keys, and update these two origins to the VM's public IP:
 
    ```dotenv
@@ -174,6 +170,7 @@ For a live smoke check, use `Invoke-RestMethod http://localhost:8000/health`, se
 ## 6. Bonus features (if any)
 
 - A responsive Lyftr-inspired operations console rather than a plain chat window.
+- The supplied Lyftr AI logo, plus a viewport-fitted chat layout with independent scrolling inside the message history and expanded side panels.
 - Independently collapsible Tools and Insights sidebars, with compact mobile controls and slide-in drawers.
 - Customer scenario starters for real estate, clinic scheduling, and order support, including Hindi/Hinglish examples.
 - One-click cache replay, key failover, and all-keys-down flows using the assignment's API contract.
