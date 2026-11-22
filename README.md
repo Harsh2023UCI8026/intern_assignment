@@ -145,7 +145,7 @@ The service exposes exactly the required application routes: `GET /health`, `POS
 
 ## 4. Verification
 
-The backend tests use a mocked provider and make no paid API calls. Run them in Docker with `docker compose run --rm backend pytest -q` or `make test` when GNU Make is available.
+The backend tests use a mocked provider and make no paid API calls. Run them with `make test`; this builds a separate Docker test stage so pytest and the test files stay out of the production runtime image. `httpx` remains available as a LiteLLM dependency. Without GNU Make, use `docker build --target test -t lyftr-ai-backend-test ./backend` followed by `docker run --rm lyftr-ai-backend-test`.
 
 The suite covers health readiness, frontend CORS preflight, request validation, multi-turn context, session isolation, oldest-first history, exact cache hits across sessions, simulated 429/500/502/503 fallback, actual provider-status fallback including 408/timeouts, disabled and malformed failure hooks, per-key all-provider failure, metadata fields, and unknown sessions.
 

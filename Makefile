@@ -10,5 +10,6 @@ logs:
 	docker compose logs -f backend frontend
 
 test:
-	docker compose run --rm backend pytest -q
+	docker build --target test -t lyftr-ai-backend-test ./backend
+	docker run --rm lyftr-ai-backend-test
 
