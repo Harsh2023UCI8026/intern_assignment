@@ -192,6 +192,11 @@ async function readError(response: Response): Promise<string> {
   try {
     const body = await response.json();
     if (typeof body.detail === "string") {
+      if (body.detail === "rate limit exceeded") {
+        const retryAfter = Number(response.headers.get("Retry-After"));
+        const wait = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 60;
+        return `Too many messages in a short time. Please wait about ${wait} seconds, then try again. This turn was not saved.`;
+      }
       if (body.detail === "all providers unavailable") {
         const providerFailure = response.headers.get("X-Provider-Failure");
         const messages: Record<string, string> = {
@@ -694,7 +699,7 @@ function App() {
                   </div>
                 </div>
                 <div className="composer-footer">
-                  <span><ShieldCheck size={13} /> Conversation context is stored privately in SQLite.</span>
+                  <span><ShieldCheck size={13} /> Full history is saved in SQLite; recent turns go to the AI.</span>
                   <span>{draft.length}/4000</span>
                 </div>
               </div>

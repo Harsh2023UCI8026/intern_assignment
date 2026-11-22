@@ -64,17 +64,29 @@ def database_is_ready() -> bool:
         return False
 
 
-def load_session_context(session_id: str) -> tuple[bool, str | None, list[dict[str, str]]]:
+def load_session_context(
+    session_id: str, limit: int | None = None
+) -> tuple[bool, str | None, list[dict[str, str]]]:
     with _database_lock, _connect() as connection:
         session = connection.execute(
             "SELECT system_prompt FROM sessions WHERE session_id = ?", (session_id,)
         ).fetchone()
         if session is None:
             return False, None, []
-        rows = connection.execute(
-            "SELECT role, content FROM messages WHERE session_id = ? ORDER BY id ASC",
-            (session_id,),
-        ).fetchall()
+        if limit is None:
+            rows = connection.execute(
+                "SELECT role, content FROM messages "
+                "WHERE session_id = ? ORDER BY id ASC",
+                (session_id,),
+            ).fetchall()
+        else:
+            rows = connection.execute(
+                "SELECT role, content FROM ("
+                "SELECT id, role, content FROM messages "
+                "WHERE session_id = ? ORDER BY id DESC LIMIT ?) "
+                "ORDER BY id ASC",
+                (session_id, limit),
+            ).fetchall()
     return True, session["system_prompt"], [
         {"role": row["role"], "content": row["content"]} for row in rows
     ]

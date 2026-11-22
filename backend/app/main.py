@@ -7,6 +7,7 @@ import time
 import uuid
 from asyncio import sleep as async_sleep
 from contextlib import asynccontextmanager
+from ipaddress import ip_address
 from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException, Request, Response
@@ -32,6 +33,7 @@ from .llm import (
     response_text,
     token_usage,
 )
+from .rate_limiter import chat_rate_limiter
 from .response_cache import CachedResponse, exact_request_key, response_cache
 
 logger = logging.getLogger("lyftr.api")
@@ -58,13 +60,24 @@ def current_settings():
     return get_settings()
 
 
+def client_rate_limit_key(request: Request) -> str:
+    """Use Railway's edge-attested client IP, otherwise the direct peer address."""
+    if request.headers.get("x-railway-edge"):
+        railway_ip = request.headers.get("x-real-ip", "").strip()
+        try:
+            return ip_address(railway_ip).compressed
+        except ValueError:
+            pass
+    return request.client.host if request.client else "unknown"
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=list(current_settings().allowed_origins),
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "X-Simulate-Failure"],
-    expose_headers=["X-Request-ID", "X-Provider-Failure"],
+    expose_headers=["X-Request-ID", "X-Provider-Failure", "Retry-After"],
 )
 
 
@@ -207,6 +220,7 @@ async def health(response: Response):
 @app.post("/chat")
 async def chat(
     payload: ChatRequest,
+    request: Request,
     x_simulate_failure: str | None = Header(default=None, alias="X-Simulate-Failure"),
 ):
     started = time.perf_counter()
@@ -218,10 +232,26 @@ async def chat(
     if not cache_is_ready():
         raise HTTPException(status_code=503, detail="LiteLLM cache is unavailable")
 
+    allowed, retry_after = chat_rate_limiter.allow(
+        client_rate_limit_key(request),
+        limit=settings.chat_rate_limit_requests,
+        window_seconds=settings.chat_rate_limit_window_seconds,
+    )
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="rate limit exceeded",
+            headers={"Retry-After": str(retry_after)},
+        )
+
     simulated_failures = _parse_simulation_header(
         x_simulate_failure, settings.failure_simulation_enabled, len(settings.api_keys)
     )
-    session_exists, saved_prompt, history = load_session_context(payload.session_id)
+    # Persist full history for the UI/API, but load only complete recent turns
+    # into memory and send them to the model so cost and latency stay bounded.
+    session_exists, saved_prompt, history = load_session_context(
+        payload.session_id, limit=settings.max_history_messages
+    )
     prompt_was_overridden = payload.system_prompt is not None
     selected_prompt = (
         payload.system_prompt

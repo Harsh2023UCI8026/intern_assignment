@@ -42,6 +42,9 @@ class Settings:
     allowed_origins: tuple[str, ...]
     failure_simulation_enabled: bool
     request_timeout_seconds: float
+    chat_rate_limit_requests: int
+    chat_rate_limit_window_seconds: int
+    max_history_messages: int
     default_system_prompt: str
 
 
@@ -59,6 +62,9 @@ def get_settings() -> Settings:
         ).split(",")
         if origin.strip()
     )
+    max_history_messages = _read_int_env("MAX_HISTORY_MESSAGES", 40, 2, 200)
+    if max_history_messages % 2:
+        raise ValueError("MAX_HISTORY_MESSAGES must be an even number of messages")
     return Settings(
         database_url=os.getenv("DATABASE_URL", "sqlite:///./data/app.db"),
         model=os.getenv("LLM_MODEL", "gemini/gemini-3.5-flash-lite"),
@@ -69,6 +75,13 @@ def get_settings() -> Settings:
         ).lower()
         in {"1", "true", "yes", "on"},
         request_timeout_seconds=float(os.getenv("LLM_TIMEOUT_SECONDS", "15")),
+        chat_rate_limit_requests=_read_int_env(
+            "CHAT_RATE_LIMIT_REQUESTS", 12, 1, 1000
+        ),
+        chat_rate_limit_window_seconds=_read_int_env(
+            "CHAT_RATE_LIMIT_WINDOW_SECONDS", 60, 1, 3600
+        ),
+        max_history_messages=max_history_messages,
         default_system_prompt=ensure_english_system_prompt(
             os.getenv(
                 "DEFAULT_SYSTEM_PROMPT",
@@ -79,6 +92,17 @@ def get_settings() -> Settings:
             )
         ),
     )
+
+
+def _read_int_env(name: str, default: int, minimum: int, maximum: int) -> int:
+    raw_value = os.getenv(name, str(default)).strip()
+    try:
+        value = int(raw_value)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+    if not minimum <= value <= maximum:
+        raise ValueError(f"{name} must be between {minimum} and {maximum}")
+    return value
 
 
 def _is_placeholder_key(value: str) -> bool:

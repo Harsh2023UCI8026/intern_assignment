@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from app import main
 from app.config import get_settings
 from app.llm import SimulatedProviderFailure
+from app.rate_limiter import SlidingWindowRateLimiter, chat_rate_limiter
 
 
 def response(text: str, *, cache_hit: bool = False, input_tokens: int = 42):
@@ -29,13 +30,18 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("LLM_API_KEYS", "first-test-key,second-test-key")
     monkeypatch.setenv("LLM_MODEL", "gemini/gemini-3.5-flash-lite")
     monkeypatch.setenv("ENABLE_FAILURE_SIMULATION", "true")
+    monkeypatch.setenv("CHAT_RATE_LIMIT_REQUESTS", "12")
+    monkeypatch.setenv("CHAT_RATE_LIMIT_WINDOW_SECONDS", "60")
+    monkeypatch.setenv("MAX_HISTORY_MESSAGES", "40")
     monkeypatch.setenv("DEFAULT_SYSTEM_PROMPT", "You are a small business assistant.")
     monkeypatch.setattr(main, "initialize_litellm", lambda: True)
     monkeypatch.setattr(main, "cache_is_ready", lambda: True)
     main.response_cache.clear()
+    chat_rate_limiter.clear()
     with TestClient(main.app) as test_client:
         yield test_client
     main.response_cache.clear()
+    chat_rate_limiter.clear()
 
 
 def test_health_reports_database_keys_and_cache(client):
@@ -81,6 +87,22 @@ def test_cors_preflight_allows_frontend_and_simulation_header(client):
     assert "x-simulate-failure" in result.headers["access-control-allow-headers"].lower()
 
 
+def test_sliding_window_limiter_expires_hits_and_returns_retry_delay(monkeypatch):
+    now = [100.0]
+    monkeypatch.setattr("app.rate_limiter.time.monotonic", lambda: now[0])
+    limiter = SlidingWindowRateLimiter()
+
+    assert limiter.allow("client", limit=2, window_seconds=10) == (True, 0)
+    now[0] = 102.0
+    assert limiter.allow("client", limit=2, window_seconds=10) == (True, 0)
+    now[0] = 103.0
+    allowed, retry_after = limiter.allow("client", limit=2, window_seconds=10)
+    assert not allowed
+    assert retry_after == 7
+    now[0] = 110.0
+    assert limiter.allow("client", limit=2, window_seconds=10) == (True, 0)
+
+
 def test_legacy_environment_prompt_is_normalized_to_english(client, monkeypatch):
     monkeypatch.setenv(
         "DEFAULT_SYSTEM_PROMPT",
@@ -103,7 +125,7 @@ def test_legacy_saved_session_prompt_is_upgraded_to_english(client, monkeypatch)
     monkeypatch.setattr(
         main,
         "load_session_context",
-        lambda _session_id: (True, loaded_prompt, []),
+        lambda _session_id, limit=None: (True, loaded_prompt, []),
     )
 
     async def fake_complete(**kwargs):
@@ -169,6 +191,109 @@ def test_multi_turn_history_is_stored_oldest_first_and_keeps_session_isolated(
     assert client.get("/sessions/beta/messages").json()["messages"][0]["content"] == "Hello"
 
 
+def test_model_context_is_bounded_but_sqlite_keeps_full_history(
+    client, monkeypatch
+):
+    monkeypatch.setenv("MAX_HISTORY_MESSAGES", "2")
+    observed_messages = []
+    observed_database_limits = []
+    original_load_context = main.load_session_context
+
+    def bounded_load_context(session_id, limit=None):
+        observed_database_limits.append(limit)
+        return original_load_context(session_id, limit)
+
+    async def fake_complete(**kwargs):
+        observed_messages.append(kwargs["messages"])
+        return response(f"answer {len(observed_messages)}")
+
+    monkeypatch.setattr(main, "load_session_context", bounded_load_context)
+    monkeypatch.setattr(main, "complete", fake_complete)
+    for message in ("First fact.", "Second fact.", "Third question."):
+        result = client.post(
+            "/chat", json={"session_id": "bounded-context", "message": message}
+        )
+        assert result.status_code == 200
+
+    third_prompt = observed_messages[2]
+    assert [item["role"] for item in third_prompt] == [
+        "system",
+        "user",
+        "assistant",
+        "user",
+    ]
+    assert [item["content"] for item in third_prompt[-3:]] == [
+        "Second fact.",
+        "answer 2",
+        "Third question.",
+    ]
+    stored_history = client.get("/sessions/bounded-context/messages").json()["messages"]
+    assert len(stored_history) == 6
+    assert stored_history[0]["content"] == "First fact."
+    assert observed_database_limits == [2, 2, 2]
+
+
+def test_chat_rate_limit_returns_429_retry_after_and_does_not_save_turn(
+    client, monkeypatch
+):
+    monkeypatch.setenv("CHAT_RATE_LIMIT_REQUESTS", "1")
+    calls = []
+
+    async def fake_complete(**_kwargs):
+        calls.append(True)
+        return response("A short reply.")
+
+    monkeypatch.setattr(main, "complete", fake_complete)
+    first = client.post(
+        "/chat", json={"session_id": "limited-one", "message": "First"}
+    )
+    blocked = client.post(
+        "/chat",
+        headers={"Origin": "http://localhost:3000"},
+        json={"session_id": "limited-two", "message": "Second"},
+    )
+
+    assert first.status_code == 200
+    assert blocked.status_code == 429
+    assert blocked.json() == {"detail": "rate limit exceeded"}
+    assert int(blocked.headers["retry-after"]) >= 1
+    assert "retry-after" in blocked.headers["access-control-expose-headers"].lower()
+    assert client.get("/sessions/limited-two/messages").status_code == 404
+    assert len(calls) == 1
+
+
+def test_only_railway_edge_marked_real_ip_changes_rate_limit_identity(
+    client, monkeypatch
+):
+    monkeypatch.setenv("CHAT_RATE_LIMIT_REQUESTS", "1")
+
+    async def fake_complete(**_kwargs):
+        return response("A short reply.")
+
+    monkeypatch.setattr(main, "complete", fake_complete)
+    first = client.post(
+        "/chat",
+        headers={"X-Real-IP": "198.51.100.10"},
+        json={"session_id": "peer-one", "message": "First"},
+    )
+    same_peer = client.post(
+        "/chat",
+        headers={"X-Real-IP": "198.51.100.11"},
+        json={"session_id": "peer-two", "message": "Second"},
+    )
+    railway_client = client.post(
+        "/chat",
+        headers={
+            "X-Real-IP": "198.51.100.11",
+            "X-Railway-Edge": "railway/test-edge",
+        },
+        json={"session_id": "railway-client", "message": "Third"},
+    )
+
+    assert first.status_code == railway_client.status_code == 200
+    assert same_peer.status_code == 429
+
+
 def test_same_first_prompt_in_new_session_can_use_exact_cache(client, monkeypatch):
     calls = []
 
@@ -199,9 +324,9 @@ def test_same_first_prompt_in_new_session_can_use_exact_cache(client, monkeypatc
 def test_latency_includes_sqlite_session_lookup(client, monkeypatch):
     original_load = main.load_session_context
 
-    def slow_load(session_id):
+    def slow_load(session_id, limit=None):
         time.sleep(0.06)
-        return original_load(session_id)
+        return original_load(session_id, limit)
 
     async def fake_complete(**_kwargs):
         return response("A short answer.")

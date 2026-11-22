@@ -84,6 +84,9 @@ Create two services from `Harsh2023UCI8026/intern_assignment`, both tracking `ma
    LLM_MODEL=gemini/gemini-3.5-flash-lite
    ENABLE_FAILURE_SIMULATION=true
    LLM_TIMEOUT_SECONDS=15
+   CHAT_RATE_LIMIT_REQUESTS=12
+   CHAT_RATE_LIMIT_WINDOW_SECONDS=60
+   MAX_HISTORY_MESSAGES=40
    DEFAULT_SYSTEM_PROMPT=You are a helpful assistant for an Indian small business. Always reply in clear natural English unless asked otherwise. Format answers with short paragraphs, headings for longer replies, concise lists, and valid Markdown tables for comparisons. Keep tables to four columns or fewer with short cells. Keep answers engaging and concise.
    ```
 
@@ -96,7 +99,7 @@ Keep both services on the Free plan. The $1 usage allowance is a hard stop rathe
 
 ### Without Docker (optional)
 
-Install Python 3.12 and Node.js 22, then install the backend dependencies and run each service in its own PowerShell window:
+Install Python 3.12 and Node.js 22.12 or later, then install the backend dependencies and run each service in its own PowerShell window:
 
 ```powershell
 cd backend
@@ -124,6 +127,7 @@ Set the backend environment variables from `.env` before starting Uvicorn. For a
 - The service retries the next key for simulated failures, HTTP 408 timeouts, HTTP 429/rate-limit/quota errors, and provider 5xx responses. `key_id` is a safe label such as `key_2`; the secret value is never returned or logged.
 - If every key fails, the API returns `503 {"detail":"all providers unavailable"}`. A failed turn is not added to history.
 - `X-Simulate-Failure` is honored only when `ENABLE_FAILURE_SIMULATION=true`. Simulated requests bypass cache reads so the failover can be demonstrated with a real provider answer.
+- Public `POST /chat` requests are limited by client IP: 12 requests per 60 seconds by default. Excess requests receive JSON `429` with `Retry-After`; API keys remain server-side. Railway's `X-Real-IP` is used only with its `X-Railway-Edge` marker; other hosts use the direct peer IP. The process-local limiter is bounded to 10,000 client entries and assumes the single backend worker configured below.
 
 ### Caching
 
@@ -136,6 +140,7 @@ Set the backend environment variables from `.env` before starting Uvicorn. For a
 
 - SQLite is the only database. `messages` stores the assignment's required fields; `sessions` stores the optional per-session system prompt.
 - A complete user/assistant turn is written in one transaction only after a successful model response. Failed requests never enter history.
+- SQLite and the history endpoint retain the complete session, but each inference sends only the latest 40 history messages (20 complete turns) to keep prompt cost, latency, and context size bounded. Configure `MAX_HISTORY_MESSAGES` to another even value from 2 to 200.
 - `GET /sessions/{session_id}/messages` returns rows oldest first and omits the system prompt. A session without a successful turn returns 404.
 - SQLite uses WAL mode, a session index, foreign-key enforcement, and the Docker named volume mounted at `/data`.
 
@@ -148,6 +153,8 @@ The service exposes exactly the required application routes: `GET /health`, `POS
 The backend tests use a mocked provider and make no paid API calls. Run them with `make test`; this builds a separate Docker test stage so pytest and the test files stay out of the production runtime image. `httpx` remains available as a LiteLLM dependency. Without GNU Make, use `docker build --target test -t lyftr-ai-backend-test ./backend` followed by `docker run --rm lyftr-ai-backend-test`.
 
 The suite covers health readiness, frontend CORS preflight, request validation, multi-turn context, session isolation, oldest-first history, exact cache hits across sessions, simulated 429/500/502/503 fallback, actual provider-status fallback including 408/timeouts, disabled and malformed failure hooks, per-key all-provider failure, metadata fields, and unknown sessions.
+
+The frontend interaction tests run with `cd frontend; npm ci; npm test`. They cover message submission, Markdown tables/bold text, per-reply metadata, 422 and provider-failure notices, and readable rate-limit feedback.
 
 For a live smoke check, use `Invoke-RestMethod http://localhost:8000/health`, send a chat request to `/chat`, then load `/sessions/{session_id}/messages`. The included UI demo buttons also exercise cache replay, key failover, and the clean all-keys-down 503 path.
 
