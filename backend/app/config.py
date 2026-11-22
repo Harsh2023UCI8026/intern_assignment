@@ -13,8 +13,8 @@ _ENGLISH_LANGUAGE_POLICY = (
 _READABILITY_POLICY = (
     "Format answers for easy scanning: use short paragraphs, descriptive headings "
     "for longer replies, concise bullets or numbered steps when helpful, and valid "
-    "Markdown tables for comparisons or when requested. Keep table cells concise "
-    "and answers engaging without unnecessary formatting."
+    "Markdown tables for comparisons or when requested. Prefer no more than four "
+    "columns and concise cells. Keep answers engaging without unnecessary formatting."
 )
 _CUSTOMER_LANGUAGE_RULE = re.compile(
     r"(?:respond|reply)\s+in\s+(?:the\s+)?"

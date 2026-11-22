@@ -1,4 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  Children,
+  createContext,
+  isValidElement,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type MutableRefObject,
+  type ReactNode,
+} from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -96,12 +107,52 @@ const scenarios: Scenario[] = [
 const CACHE_PROMPT =
   "A customer asks in Hinglish: 'Kya aap Sunday ko site visit book kar sakte ho?' Reply in one helpful sentence.";
 
+const tableHeadersContext = createContext<string[]>([]);
+const tableColumnIndexContext = createContext<MutableRefObject<number> | null>(null);
+
+function markdownText(node: ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(markdownText).join("");
+  if (isValidElement<{ children?: ReactNode }>(node)) return markdownText(node.props.children);
+  return "";
+}
+
+function tableHeaders(children: ReactNode): string[] {
+  const header = Children.toArray(children).find(
+    (section) => isValidElement(section) && section.type === "thead",
+  );
+  if (!isValidElement<{ children?: ReactNode }>(header)) return [];
+  const headerRow = Children.toArray(header.props.children).find(
+    (row) => isValidElement(row),
+  );
+  if (!isValidElement<{ children?: ReactNode }>(headerRow)) return [];
+  return Children.toArray(headerRow.props.children).map(markdownText);
+}
+
 const markdownComponents: Components = {
   table: ({ children }) => (
-    <div className="markdown-table-scroll" role="region" aria-label="Answer table" tabIndex={0}>
-      <table>{children}</table>
-    </div>
+    <tableHeadersContext.Provider value={tableHeaders(children)}>
+      <div className="markdown-table-scroll" role="region" aria-label="Answer table" tabIndex={0}>
+        <table>{children}</table>
+      </div>
+    </tableHeadersContext.Provider>
   ),
+  tr: ({ children }) => {
+    const columnIndex = useRef(0);
+    columnIndex.current = 0;
+    return (
+      <tableColumnIndexContext.Provider value={columnIndex}>
+        <tr>{children}</tr>
+      </tableColumnIndexContext.Provider>
+    );
+  },
+  td: ({ children }) => {
+    const headers = useContext(tableHeadersContext);
+    const columnIndex = useContext(tableColumnIndexContext);
+    const currentIndex = columnIndex?.current ?? 0;
+    if (columnIndex) columnIndex.current += 1;
+    return <td data-label={headers[currentIndex] || "Value"}>{children}</td>;
+  },
   a: ({ href, children }) =>
     href ? (
       <a href={href} target="_blank" rel="noopener noreferrer">

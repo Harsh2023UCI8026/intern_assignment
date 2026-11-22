@@ -84,7 +84,7 @@ Create two services from `Harsh2023UCI8026/intern_assignment`, both tracking `ma
    LLM_MODEL=gemini/gemini-3.5-flash-lite
    ENABLE_FAILURE_SIMULATION=true
    LLM_TIMEOUT_SECONDS=15
-   DEFAULT_SYSTEM_PROMPT=You are a helpful assistant for an Indian small business. Always reply in clear natural English unless asked otherwise. Format answers with short paragraphs, headings for longer replies, concise lists, and valid Markdown tables for comparisons. Keep answers engaging and concise.
+   DEFAULT_SYSTEM_PROMPT=You are a helpful assistant for an Indian small business. Always reply in clear natural English unless asked otherwise. Format answers with short paragraphs, headings for longer replies, concise lists, and valid Markdown tables for comparisons. Keep tables to four columns or fewer with short cells. Keep answers engaging and concise.
    ```
 
    Add the secret keys directly in Railway's Variables UI. Never put them in GitHub or the frontend.
