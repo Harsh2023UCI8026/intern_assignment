@@ -259,7 +259,15 @@ def test_simulated_provider_status_fails_over_and_reports_the_winning_key(
     assert result.json()["metadata"]["key_id"] == "key_2"
     assert result.json()["metadata"]["fallback_attempts"] == 1
     assert result.json()["metadata"]["resolution_source"] == "LIVE_INFERENCE"
-    assert simulated_statuses == [status, None]
+
+    next_request = client.post(
+        "/chat",
+        json={"session_id": "fallback-next-request", "message": "Hello again."},
+    )
+
+    assert next_request.status_code == 200
+    assert next_request.json()["metadata"]["key_id"] == "key_1"
+    assert simulated_statuses == [status, None, None]
 
 
 @pytest.mark.parametrize("status", [400, 401, 403, 408, 429, 500, 502, 503])
