@@ -290,6 +290,8 @@ a { color: inherit; text-decoration: none; }
 .model-item { max-width: 110px; }
 .model-item span { overflow: hidden; text-overflow: ellipsis; }
 .token-item { gap: 3px; }
+.token-pair { display: inline-flex; align-items: center; gap: 2px; }
+.token-pair small { color: #94a3b8; font-size: 8px; }
 .token-label { color: #94a3b8; margin-left: 1px; }
 .fallback-badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 6px; color: #a16207; background: #fffbeb; border-radius: 6px; font-weight: 650; }
 .message-footnote { display: flex; gap: 5px; margin-top: 5px; color: #a8b3c2; font-size: 9px; }

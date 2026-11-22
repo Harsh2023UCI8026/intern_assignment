@@ -327,7 +327,7 @@ async def chat(
                     fallback_attempts = 0
                 else:
                     winning_key_id = "key_1"
-                    fallback_attempts = max(fallback_attempts, len(settings.api_keys) - 1)
+                    fallback_attempts += 1
             except Exception as error:
                 failure_kind = _provider_failure_kind(error)
                 failure_kinds.append(failure_kind)

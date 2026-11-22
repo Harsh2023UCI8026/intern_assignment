@@ -365,6 +365,7 @@ def test_temporary_outage_gets_one_short_retry(client, monkeypatch):
     assert result.status_code == 200
     assert result.json()["reply"] == "Recovered after the provider came back."
     assert result.json()["metadata"]["key_id"] == "key_1"
+    assert result.json()["metadata"]["fallback_attempts"] == 2
     assert calls == ["first-test-key", "second-test-key", "first-test-key"]
 
 

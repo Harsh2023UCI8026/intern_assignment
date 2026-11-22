@@ -287,7 +287,7 @@ function App() {
     textarea.style.height = `${Math.min(textarea.scrollHeight, 136)}px`;
   }, [draft]);
 
-  const startNewConversation = useCallback((keepPrompt = true) => {
+  const startNewConversation = useCallback((keepPrompt = false) => {
     const nextSession = createSessionId();
     setSessionId(nextSession);
     setMessages([]);
@@ -387,7 +387,7 @@ function App() {
   );
 
   const runCacheReplay = useCallback(async () => {
-    const nextSession = startNewConversation();
+    const nextSession = startNewConversation(true);
     await sendMessage(CACHE_PROMPT, { sessionId: nextSession });
   }, [sendMessage, startNewConversation]);
 
@@ -888,7 +888,11 @@ function MessageRow({
           <span className="metadata-divider" />
           <span className="metadata-item model-item" title={metadata.model}><Sparkles size={12} /><span data-testid="meta-model">{metadata.model}</span></span>
           <span className="metadata-item"><Clock3 size={12} /><span data-testid="meta-latency">{metadata.latency_ms} ms</span></span>
-          <span className="metadata-item token-item"><ArrowDownRight size={12} /><span data-testid="meta-input-tokens">{metadata.input_tokens}</span><ArrowUpRight size={12} /><span data-testid="meta-output-tokens">{metadata.output_tokens}</span><span className="token-label">tokens</span></span>
+          <span className="metadata-item token-item">
+            <span className="token-pair"><ArrowDownRight size={12} /><span data-testid="meta-input-tokens">{metadata.input_tokens}</span><small>in</small></span>
+            <span className="token-pair"><ArrowUpRight size={12} /><span data-testid="meta-output-tokens">{metadata.output_tokens}</span><small>out</small></span>
+            <span className="token-label">tokens</span>
+          </span>
           {metadata.fallback_attempts > 0 && (
           <span className="fallback-badge"><Zap size={12} /> {metadata.key_id} after {metadata.fallback_attempts} {metadata.fallback_attempts === 1 ? "retry" : "retries"}</span>
           )}
