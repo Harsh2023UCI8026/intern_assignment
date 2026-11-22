@@ -209,6 +209,7 @@ async def chat(
     payload: ChatRequest,
     x_simulate_failure: str | None = Header(default=None, alias="X-Simulate-Failure"),
 ):
+    started = time.perf_counter()
     settings = current_settings()
     if len(settings.api_keys) < 2:
         raise HTTPException(
@@ -235,7 +236,6 @@ async def chat(
         {"role": "user", "content": payload.message},
     ]
 
-    started = time.perf_counter()
     cache_key = exact_request_key(settings.model, messages)
     fallback_attempts = 0
     failure_kinds: list[str] = []

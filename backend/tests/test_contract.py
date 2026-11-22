@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import asyncio
+import time
 from types import SimpleNamespace
 
 import pytest
+from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from app import main
@@ -45,6 +48,21 @@ def test_health_reports_database_keys_and_cache(client):
         "cache_enabled": True,
         "database_ready": True,
         "failure_simulation_enabled": True,
+    }
+
+
+def test_only_the_three_assignment_api_routes_are_exposed(client):
+    routes = {
+        (method, route.path)
+        for route in main.app.routes
+        if isinstance(route, APIRoute)
+        for method in route.methods
+    }
+
+    assert routes == {
+        ("GET", "/health"),
+        ("POST", "/chat"),
+        ("GET", "/sessions/{session_id}/messages"),
     }
 
 
@@ -157,6 +175,7 @@ def test_same_first_prompt_in_new_session_can_use_exact_cache(client, monkeypatc
     async def fake_complete(**kwargs):
         calls.append(kwargs)
         if len(calls) == 1:
+            await asyncio.sleep(0.04)
             return response("A Sunday site visit can be arranged.")
         raise RuntimeError("cached response could not be decoded")
 
@@ -171,7 +190,31 @@ def test_same_first_prompt_in_new_session_can_use_exact_cache(client, monkeypatc
     assert second["metadata"]["resolution_source"] == "LLM_CACHE"
     assert second["metadata"]["key_id"] is None
     assert second["metadata"]["fallback_attempts"] == 0
+    assert first["metadata"]["input_tokens"] == second["metadata"]["input_tokens"]
+    assert first["metadata"]["output_tokens"] == second["metadata"]["output_tokens"]
+    assert second["metadata"]["latency_ms"] < first["metadata"]["latency_ms"]
     assert len(calls) == 2
+
+
+def test_latency_includes_sqlite_session_lookup(client, monkeypatch):
+    original_load = main.load_session_context
+
+    def slow_load(session_id):
+        time.sleep(0.06)
+        return original_load(session_id)
+
+    async def fake_complete(**_kwargs):
+        return response("A short answer.")
+
+    monkeypatch.setattr(main, "load_session_context", slow_load)
+    monkeypatch.setattr(main, "complete", fake_complete)
+
+    result = client.post(
+        "/chat", json={"session_id": "latency-contract", "message": "Hello"}
+    )
+
+    assert result.status_code == 200
+    assert result.json()["metadata"]["latency_ms"] >= 50
 
 
 def test_exact_response_cache_key_includes_model_and_full_message_list(client):
@@ -399,6 +442,18 @@ def test_invalid_requests_are_422_and_do_not_write_history(client, payload):
     result = client.post("/chat", json=payload)
 
     assert result.status_code == 422
+
+
+def test_malformed_json_returns_422_with_json_detail(client):
+    result = client.post(
+        "/chat",
+        content='{"session_id":',
+        headers={"Content-Type": "application/json"},
+    )
+
+    assert result.status_code == 422
+    assert result.headers["content-type"].startswith("application/json")
+    assert "detail" in result.json()
 
 
 def test_unknown_session_history_returns_404(client):
