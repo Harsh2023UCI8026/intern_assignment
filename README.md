@@ -10,10 +10,10 @@ This project is configured for free-tier use only: Docker locally, Gemini API fr
 | --- | --- |
 | Local frontend | http://localhost:3000 |
 | Local backend | http://localhost:8000 |
-| Public frontend | Add after Railway deployment |
-| Public backend | Add after Railway deployment |
+| Public frontend | **Needs a valid Railway frontend domain.** The candidate `https://brilliant-tenderness-production-33de6e.up.railway.app` currently returns Railway `Application not found`; do not submit it. |
+| Public backend | https://internassignment-production.up.railway.app |
 
-The assignment requires public frontend and backend URLs. They are not published from this workspace yet; a Railway account must be connected to the GitHub repository and the service variables below must be set.
+The backend health endpoint is live at [https://internassignment-production.up.railway.app/health](https://internassignment-production.up.railway.app/health). The backend root `/` intentionally returns `{"detail":"Not Found"}` because the assignment API exposes `/health`, `/chat`, and `/sessions/{session_id}/messages`. The frontend's public domain still needs to be generated or restored in Railway, then the frontend and backend connection must be rechecked before submission.
 
 ## 2. Run locally
 
