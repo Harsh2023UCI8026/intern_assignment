@@ -159,10 +159,15 @@ For a live smoke check, use `Invoke-RestMethod http://localhost:8000/health`, se
 4. Click **Simulate key failover**; show `key_2` and one fallback attempt.
 5. Click **Simulate all keys down**; show the readable 503 and verify the failed turn is absent from session history.
 
+The actual recording is a separate submission item and must use your own voice. A timed script and copy-paste endpoint checks are in [`docs/demo-video-script.md`](docs/demo-video-script.md).
+
 ## 5. Setup Used
 
-- Editor: Codex workspace
-- AI tools: OpenAI Codex for research, implementation, and documentation
+- Editor and terminal: Visual Studio Code and PowerShell on Windows
+- Local container runtime: Docker Desktop with Docker Compose
+- AI coding assistant: OpenAI Codex (the assignment permits AI tools)
+- Model integration: Google Gemini through LiteLLM; API keys remain in ignored `.env` and Railway variables
+- Public hosting: Railway
 - Stack: React, TypeScript, Vite, Python, FastAPI, LiteLLM, SQLite, Docker Compose
 
 ## 6. Bonus features (if any)
